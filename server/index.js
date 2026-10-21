@@ -4,6 +4,7 @@ import express from 'express';
 import cors from 'cors';
 import {
   AccessToken,
+  TokenVerifier,
   RoomServiceClient,
 } from 'livekit-server-sdk';
 
@@ -75,43 +76,14 @@ app.post('/api/token', async (req, res) => {
   }
 });
 
-// 管理者による参加者のマイク強制ミュート
+// 同じルームに接続中の参加者によるマイク強制ミュート
 app.post('/api/admin/mute', async (req, res) => {
   try {
-    const { adminKey, room, identity } = req.body ?? {};
+    const { requesterToken, room, identity } = req.body ?? {};
 
-    const expectedKey = process.env.ROOM_ADMIN_KEY;
     const apiKey = process.env.LIVEKIT_API_KEY;
     const apiSecret = process.env.LIVEKIT_API_SECRET;
     const livekitUrl = process.env.LIVEKIT_URL;
-
-    if (!expectedKey) {
-      return res.status(503).json({
-        error: '管理者キーがRenderに設定されていません。',
-      });
-    }
-
-    if (
-      typeof adminKey !== 'string' ||
-      adminKey.length !== expectedKey.length ||
-      adminKey !== expectedKey
-    ) {
-      return res.status(403).json({
-        error: '管理者キーが正しくありません。',
-      });
-    }
-
-    if (
-      typeof room !== 'string' ||
-      !/^[a-zA-Z0-9_-]{3,40}$/.test(room) ||
-      typeof identity !== 'string' ||
-      identity.length < 1 ||
-      identity.length > 80
-    ) {
-      return res.status(400).json({
-        error: 'ルーム名または参加者IDが正しくありません。',
-      });
-    }
 
     if (!livekitUrl || !apiKey || !apiSecret) {
       return res.status(500).json({
@@ -119,7 +91,45 @@ app.post('/api/admin/mute', async (req, res) => {
       });
     }
 
-    // LiveKitの管理APIには wss:// ではなく https:// を使用
+    if (
+      typeof requesterToken !== 'string' ||
+      requesterToken.length > 10000 ||
+      typeof room !== 'string' ||
+      !/^[a-zA-Z0-9_-]{3,40}$/.test(room) ||
+      typeof identity !== 'string' ||
+      identity.length < 1 ||
+      identity.length > 80
+    ) {
+      return res.status(400).json({
+        error: 'リクエストの内容が正しくありません。',
+      });
+    }
+
+    // 送信された参加トークンの署名と有効期限を検証
+    const verifier = new TokenVerifier(apiKey, apiSecret);
+    const claims = await verifier.verify(requesterToken);
+
+    const requesterIdentity = claims.sub;
+    const tokenRoom = claims.video?.room;
+
+    if (
+      typeof requesterIdentity !== 'string' ||
+      !requesterIdentity ||
+      tokenRoom !== room
+    ) {
+      return res.status(403).json({
+        error: 'このルームからの操作として確認できません。',
+      });
+    }
+
+    // 自分自身は強制ミュートできない
+    if (requesterIdentity === identity) {
+      return res.status(400).json({
+        error: '自分自身を強制ミュートすることはできません。',
+      });
+    }
+
+    // LiveKit管理APIの接続先は https:// または http://
     const host = livekitUrl
       .replace(/^wss:/, 'https:')
       .replace(/^ws:/, 'http:');
@@ -130,18 +140,24 @@ app.post('/api/admin/mute', async (req, res) => {
       apiSecret
     );
 
-    const participant = await livekit.getParticipant(room, identity);
+    // 操作者が実際にそのルームへ接続中か確認
+    await livekit.getParticipant(room, requesterIdentity);
 
-    // TrackSource.MICROPHONE は通常、数値の2
+    // 対象者がそのルームに接続中か確認
+    const participant = await livekit.getParticipant(
+      room,
+      identity
+    );
+
+    // マイクのトラックを探す
     const microphone = participant.tracks?.find((track) => {
       const source = String(track.source).toUpperCase();
-
       return source === '2' || source.includes('MICROPHONE');
     });
 
     if (!microphone) {
       return res.status(409).json({
-        error: '対象者のマイクトラックが見つかりません。',
+        error: '対象者のマイクトラックが見つかりません。マイクがOFFの可能性があります。',
       });
     }
 
@@ -157,9 +173,10 @@ app.post('/api/admin/mute', async (req, res) => {
       message: '参加者を強制ミュートしました。',
     });
   } catch (error) {
-    console.error('Admin mute error:', error);
-    res.status(500).json({
-      error: '強制ミュートに失敗しました。対象者の状態を確認してください。',
+    // トークンが無効な場合などは操作を拒否
+    console.error('Mute request failed:', error);
+    res.status(403).json({
+      error: '強制ミュートできませんでした。ルームへの接続状態を確認してください。',
     });
   }
 });
