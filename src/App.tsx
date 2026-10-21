@@ -1,10 +1,23 @@
+
 import { useState } from 'react';
 import {
   LiveKitRoom,
-  VideoConference
+  RoomAudioRenderer,
+  VideoTrack,
+  useParticipants,
+  useTracks,
 } from '@livekit/components-react';
+import { Track } from 'livekit-client';
 
-type Connection = { token: string; serverUrl: string };
+type Connection = {
+  token: string;
+  serverUrl: string;
+  room: string;
+  identity: string;
+  name: string;
+};
+
+const API_URL = 'https://tcg-remote-room.onrender.com';
 
 export default function App() {
   const [roomName, setRoomName] = useState('friends-room');
@@ -20,6 +33,7 @@ export default function App() {
 
     const safeRoom = roomName.trim();
     const safeName = displayName.trim();
+
     if (!safeName) {
       setError('表示名を入力してください。');
       setBusy(false);
@@ -27,18 +41,31 @@ export default function App() {
     }
 
     try {
-      const response = await fetch('https://tcg-remote-room.onrender.com/api/token', {
+      const identity =
+        `${safeName}-${crypto.randomUUID().slice(0, 8)}`;
+
+      const response = await fetch(`${API_URL}/api/token`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           room: safeRoom,
-          identity: `${safeName}-${crypto.randomUUID().slice(0, 8)}`,
-          name: safeName
-        })
+          identity,
+          name: safeName,
+        }),
       });
+
       const data = await response.json();
-      if (!response.ok) throw new Error(data.error || '接続に失敗しました。');
-      setConnection(data);
+
+      if (!response.ok) {
+        throw new Error(data.error || '接続に失敗しました。');
+      }
+
+      setConnection({
+        ...data,
+        room: safeRoom,
+        identity,
+        name: safeName,
+      });
     } catch (e) {
       setError(e instanceof Error ? e.message : '接続に失敗しました。');
     } finally {
@@ -52,16 +79,17 @@ export default function App() {
         <header className="room-header">
           <div>
             <div className="eyebrow">TCG REMOTE PLAY</div>
-            <h1>{roomName}</h1>
-            <p>カメラを盤面の真上に固定すると、カードが見やすくなります。</p>
+            <h1>{connection.room}</h1>
+            <p>カメラONの参加者を優先して表示します。</p>
           </div>
-          <button className="secondary-button" onClick={() => setConnection(null)}>
+          <button
+            className="secondary-button"
+            onClick={() => setConnection(null)}
+          >
             退出する
           </button>
         </header>
-        <div className="notice">
-          初回はブラウザのカメラ・マイク使用許可が必要です。映像が出ない場合は、下の設定ボタンからカメラを選択してください。
-        </div>
+
         <LiveKitRoom
           serverUrl={connection.serverUrl}
           token={connection.token}
@@ -70,11 +98,15 @@ export default function App() {
           audio={true}
           options={{ adaptiveStream: true, dynacast: true }}
           onError={(e) => setError(e.message)}
+          onDisconnected={() => setConnection(null)}
         >
-          <div className="conference-shell">
-            <VideoConference />
-          </div>
+          <RoomStage
+            room={connection.room}
+            identity={connection.identity}
+          />
+          <RoomAudioRenderer />
         </LiveKitRoom>
+
         {error && <p className="error">{error}</p>}
       </main>
     );
@@ -84,11 +116,16 @@ export default function App() {
     <main className="landing">
       <section className="hero">
         <div className="eyebrow">PHYSICAL TCG · REMOTE ROOM</div>
-        <h1>いつものカードで、<br /><span>どこからでも対戦。</span></h1>
+        <h1>
+          いつものカードで、
+          <br />
+          <span>どこからでも対戦。</span>
+        </h1>
         <p className="intro">
-          盤面カメラ・ボイスチャット・テキストチャットをひとつのルームに。
-          PC、iPhone、Androidのブラウザから参加できます。
+          盤面カメラ・ボイスチャットをひとつのルームに。
+          PC、iPhone、Androidから参加できます。
         </p>
+
         <form className="join-card" onSubmit={joinRoom}>
           <label>
             ルーム名
@@ -100,8 +137,9 @@ export default function App() {
               pattern="[a-zA-Z0-9_-]+"
               required
             />
-            <small>友達にも同じルーム名を伝えてください（英数字、-、_）。</small>
+            <small>参加者全員で同じルーム名を使用してください。</small>
           </label>
+
           <label>
             表示名
             <input
@@ -112,18 +150,163 @@ export default function App() {
               required
             />
           </label>
+
           {error && <p className="error">{error}</p>}
+
           <button className="primary-button" disabled={busy}>
             {busy ? '接続準備中…' : 'ルームに参加する'}
           </button>
         </form>
-        <div className="features">
-          <span>● カメラ映像</span>
-          <span>● 双方向ボイス</span>
-          <span>● テキストチャット</span>
-        </div>
       </section>
-      <footer>試作版 · 友達とのテスト用</footer>
     </main>
+  );
+}
+
+function RoomStage({
+  room,
+  identity,
+}: {
+  room: string;
+  identity: string;
+}) {
+  const participants = useParticipants();
+  const cameraTracks = useTracks([Track.Source.Camera]);
+
+  // カメラONかつ映像トラックがミュートされていない人だけ表示
+  const visibleTracks = cameraTracks.filter(
+    (track) =>
+      track.participant.isCameraEnabled &&
+      track.publication &&
+      !track.publication.isMuted
+  );
+
+  const [muting, setMuting] = useState<string | null>(null);
+  const [message, setMessage] = useState('');
+
+  async function forceMute(
+    targetIdentity: string,
+    targetName: string
+  ) {
+    const adminKey = window.prompt(
+      `${targetName}さんを強制ミュートします。\n管理者キーを入力してください。`
+    );
+
+    if (!adminKey) return;
+
+    setMuting(targetIdentity);
+    setMessage('');
+
+    try {
+      const response = await fetch(`${API_URL}/api/admin/mute`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          adminKey,
+          room,
+          identity: targetIdentity,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || 'ミュートに失敗しました。');
+      }
+
+      setMessage(`${targetName}さんを強制ミュートしました。`);
+    } catch (e) {
+      setMessage(
+        e instanceof Error ? e.message : 'ミュートに失敗しました。'
+      );
+    } finally {
+      setMuting(null);
+    }
+  }
+
+  return (
+    <div className="room-layout">
+      <section className="video-section">
+        <div className="section-heading">
+          <h2>カメラ映像</h2>
+          <span>{visibleTracks.length}人がカメラON</span>
+        </div>
+
+        {visibleTracks.length > 0 ? (
+          <div className="video-grid">
+            {visibleTracks.map((track) => (
+              <article
+                className="video-card"
+                key={`${track.participant.identity}-${track.publication?.trackSid}`}
+              >
+                <div className="video-frame">
+                  <VideoTrack trackRef={track} />
+                </div>
+                <div className="video-name">
+                  {track.participant.name || track.participant.identity}
+                  {track.participant.identity === identity && '（自分）'}
+                </div>
+              </article>
+            ))}
+          </div>
+        ) : (
+          <div className="empty-video">
+            カメラをONにしている参加者はいません。
+          </div>
+        )}
+
+        <p className="video-help">
+          カメラをOFFにすると、この映像エリアから非表示になります。
+          メンバー一覧には引き続き表示されます。
+        </p>
+      </section>
+
+      <aside className="member-panel">
+        <h2>メンバー一覧</h2>
+        <p className="member-count">{participants.length}人が参加中</p>
+
+        <div className="member-list">
+          {participants.map((participant) => (
+            <article
+              className="member-item"
+              key={participant.identity}
+            >
+              <div className="member-info">
+                <strong>
+                  {participant.name || participant.identity}
+                  {participant.identity === identity && '（自分）'}
+                </strong>
+                <span>
+                  {participant.isCameraEnabled ? '📷 カメラON' : 'カメラOFF'}
+                  {' · '}
+                  {participant.isMicrophoneEnabled ? '🎙️ マイクON' : 'マイクOFF'}
+                </span>
+              </div>
+
+              {participant.identity !== identity && (
+                <button
+                  className="mute-button"
+                  disabled={muting !== null}
+                  onClick={() =>
+                    forceMute(
+                      participant.identity,
+                      participant.name || participant.identity
+                    )
+                  }
+                >
+                  {muting === participant.identity
+                    ? '処理中…'
+                    : '強制ミュート'}
+                </button>
+              )}
+            </article>
+          ))}
+        </div>
+
+        {message && <p className="status-message">{message}</p>}
+        <p className="admin-note">
+          強制ミュートにはRenderで設定する管理者キーが必要です。
+        </p>
+      </aside>
+    </div>
   );
 }
