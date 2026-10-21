@@ -112,6 +112,7 @@ export default function App() {
           <RoomStage
             room={connection.room}
             identity={connection.identity}
+            token={connection.token}
           />
           <RoomAudioRenderer />
         </LiveKitRoom>
@@ -178,9 +179,11 @@ export default function App() {
 function RoomStage({
   room,
   identity,
+  token,
 }: {
   room: string;
   identity: string;
+  token: string;
 }) {
   const participants = useParticipants();
 
@@ -206,11 +209,15 @@ function RoomStage({
     targetIdentity: string,
     targetName: string
   ) {
-    const adminKey = window.prompt(
-      `${targetName}さんを強制ミュートします。\n管理者キーを入力してください。`
+    if (targetIdentity === identity || muting !== null) {
+      return;
+    }
+
+    const confirmed = window.confirm(
+      `${targetName}さんのマイクを強制ミュートしますか？`
     );
 
-    if (!adminKey) return;
+    if (!confirmed) return;
 
     setMuting(targetIdentity);
     setMessage('');
@@ -220,7 +227,7 @@ function RoomStage({
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          adminKey,
+          requesterToken: token,
           room,
           identity: targetIdentity,
         }),
@@ -369,7 +376,7 @@ function RoomStage({
           )}
 
           <p className="admin-note">
-            強制ミュートには管理者キーが必要です。
+            同じルームの参加者は、ほかの参加者を強制ミュートできます。
           </p>
         </aside>
       </div>
