@@ -6,8 +6,11 @@ import {
   VideoTrack,
   useParticipants,
   useTracks,
+  useLocalParticipant,
 } from '@livekit/components-react';
 import { Track } from 'livekit-client';
+
+const API_URL = 'https://tcg-remote-room.onrender.com';
 
 type Connection = {
   token: string;
@@ -16,8 +19,6 @@ type Connection = {
   identity: string;
   name: string;
 };
-
-const API_URL = 'https://tcg-remote-room.onrender.com';
 
 export default function App() {
   const [roomName, setRoomName] = useState('friends-room');
@@ -29,16 +30,21 @@ export default function App() {
   async function joinRoom(event: React.FormEvent) {
     event.preventDefault();
     setError('');
-    setBusy(true);
 
     const safeRoom = roomName.trim();
     const safeName = displayName.trim();
 
-    if (!safeName) {
-      setError('表示名を入力してください。');
-      setBusy(false);
+    if (!/^[a-zA-Z0-9_-]{3,40}$/.test(safeRoom)) {
+      setError('ルーム名は半角英数字、_、- の3〜40文字にしてください。');
       return;
     }
+
+    if (!safeName || safeName.length > 40) {
+      setError('表示名を1〜40文字で入力してください。');
+      return;
+    }
+
+    setBusy(true);
 
     try {
       const identity =
@@ -67,7 +73,9 @@ export default function App() {
         name: safeName,
       });
     } catch (e) {
-      setError(e instanceof Error ? e.message : '接続に失敗しました。');
+      setError(
+        e instanceof Error ? e.message : '接続に失敗しました。'
+      );
     } finally {
       setBusy(false);
     }
@@ -82,6 +90,7 @@ export default function App() {
             <h1>{connection.room}</h1>
             <p>カメラONの参加者を優先して表示します。</p>
           </div>
+
           <button
             className="secondary-button"
             onClick={() => setConnection(null)}
@@ -116,11 +125,13 @@ export default function App() {
     <main className="landing">
       <section className="hero">
         <div className="eyebrow">PHYSICAL TCG · REMOTE ROOM</div>
+
         <h1>
           いつものカードで、
           <br />
           <span>どこからでも対戦。</span>
         </h1>
+
         <p className="intro">
           盤面カメラ・ボイスチャットをひとつのルームに。
           PC、iPhone、Androidから参加できます。
@@ -137,7 +148,9 @@ export default function App() {
               pattern="[a-zA-Z0-9_-]+"
               required
             />
-            <small>参加者全員で同じルーム名を使用してください。</small>
+            <small>
+              参加者全員で同じルーム名を使用してください。
+            </small>
           </label>
 
           <label>
@@ -170,9 +183,15 @@ function RoomStage({
   identity: string;
 }) {
   const participants = useParticipants();
+
+  const {
+    localParticipant,
+    isCameraEnabled,
+    isMicrophoneEnabled,
+  } = useLocalParticipant();
+
   const cameraTracks = useTracks([Track.Source.Camera]);
 
-  // カメラONかつ映像トラックがミュートされていない人だけ表示
   const visibleTracks = cameraTracks.filter(
     (track) =>
       track.participant.isCameraEnabled &&
@@ -216,7 +235,9 @@ function RoomStage({
       setMessage(`${targetName}さんを強制ミュートしました。`);
     } catch (e) {
       setMessage(
-        e instanceof Error ? e.message : 'ミュートに失敗しました。'
+        e instanceof Error
+          ? e.message
+          : 'ミュートに失敗しました。'
       );
     } finally {
       setMuting(null);
@@ -224,89 +245,134 @@ function RoomStage({
   }
 
   return (
-    <div className="room-layout">
-      <section className="video-section">
-        <div className="section-heading">
-          <h2>カメラ映像</h2>
-          <span>{visibleTracks.length}人がカメラON</span>
-        </div>
+    <>
+      <div className="device-controls">
+        <button
+          className={
+            isCameraEnabled
+              ? 'device-button active'
+              : 'device-button'
+          }
+          onClick={() =>
+            localParticipant.setCameraEnabled(!isCameraEnabled)
+          }
+        >
+          {isCameraEnabled ? '📷 カメラOFF' : '📷 カメラON'}
+        </button>
 
-        {visibleTracks.length > 0 ? (
-          <div className="video-grid">
-            {visibleTracks.map((track) => (
+        <button
+          className={
+            isMicrophoneEnabled
+              ? 'device-button active'
+              : 'device-button'
+          }
+          onClick={() =>
+            localParticipant.setMicrophoneEnabled(
+              !isMicrophoneEnabled
+            )
+          }
+        >
+          {isMicrophoneEnabled ? '🎙️ マイクOFF' : '🔇 マイクON'}
+        </button>
+      </div>
+
+      <div className="room-layout">
+        <section className="video-section">
+          <div className="section-heading">
+            <h2>カメラ映像</h2>
+            <span>{visibleTracks.length}人がカメラON</span>
+          </div>
+
+          {visibleTracks.length > 0 ? (
+            <div className="video-grid">
+              {visibleTracks.map((track) => (
+                <article
+                  className="video-card"
+                  key={`${track.participant.identity}-${track.publication?.trackSid}`}
+                >
+                  <div className="video-frame">
+                    <VideoTrack trackRef={track} />
+                  </div>
+
+                  <div className="video-name">
+                    {track.participant.name ||
+                      track.participant.identity}
+                    {track.participant.identity === identity &&
+                      '（自分）'}
+                  </div>
+                </article>
+              ))}
+            </div>
+          ) : (
+            <div className="empty-video">
+              カメラをONにしている参加者はいません。
+            </div>
+          )}
+
+          <p className="video-help">
+            カメラOFFの参加者は映像エリアから非表示になります。
+            メンバー一覧には残ります。
+          </p>
+        </section>
+
+        <aside className="member-panel">
+          <h2>メンバー一覧</h2>
+          <p className="member-count">
+            {participants.length}人が参加中
+          </p>
+
+          <div className="member-list">
+            {participants.map((participant) => (
               <article
-                className="video-card"
-                key={`${track.participant.identity}-${track.publication?.trackSid}`}
+                className="member-item"
+                key={participant.identity}
               >
-                <div className="video-frame">
-                  <VideoTrack trackRef={track} />
+                <div className="member-info">
+                  <strong>
+                    {participant.name || participant.identity}
+                    {participant.identity === identity && '（自分）'}
+                  </strong>
+
+                  <span>
+                    {participant.isCameraEnabled
+                      ? '📷 カメラON'
+                      : 'カメラOFF'}
+                    {' · '}
+                    {participant.isMicrophoneEnabled
+                      ? '🎙️ マイクON'
+                      : 'マイクOFF'}
+                  </span>
                 </div>
-                <div className="video-name">
-                  {track.participant.name || track.participant.identity}
-                  {track.participant.identity === identity && '（自分）'}
-                </div>
+
+                {participant.identity !== identity && (
+                  <button
+                    className="mute-button"
+                    disabled={muting !== null}
+                    onClick={() =>
+                      forceMute(
+                        participant.identity,
+                        participant.name || participant.identity
+                      )
+                    }
+                  >
+                    {muting === participant.identity
+                      ? '処理中…'
+                      : '強制ミュート'}
+                  </button>
+                )}
               </article>
             ))}
           </div>
-        ) : (
-          <div className="empty-video">
-            カメラをONにしている参加者はいません。
-          </div>
-        )}
 
-        <p className="video-help">
-          カメラをOFFにすると、この映像エリアから非表示になります。
-          メンバー一覧には引き続き表示されます。
-        </p>
-      </section>
+          {message && (
+            <p className="status-message">{message}</p>
+          )}
 
-      <aside className="member-panel">
-        <h2>メンバー一覧</h2>
-        <p className="member-count">{participants.length}人が参加中</p>
-
-        <div className="member-list">
-          {participants.map((participant) => (
-            <article
-              className="member-item"
-              key={participant.identity}
-            >
-              <div className="member-info">
-                <strong>
-                  {participant.name || participant.identity}
-                  {participant.identity === identity && '（自分）'}
-                </strong>
-                <span>
-                  {participant.isCameraEnabled ? '📷 カメラON' : 'カメラOFF'}
-                  {' · '}
-                  {participant.isMicrophoneEnabled ? '🎙️ マイクON' : 'マイクOFF'}
-                </span>
-              </div>
-
-              {participant.identity !== identity && (
-                <button
-                  className="mute-button"
-                  disabled={muting !== null}
-                  onClick={() =>
-                    forceMute(
-                      participant.identity,
-                      participant.name || participant.identity
-                    )
-                  }
-                >
-                  {muting === participant.identity
-                    ? '処理中…'
-                    : '強制ミュート'}
-                </button>
-              )}
-            </article>
-          ))}
-        </div>
-
-        {message && <p className="status-message">{message}</p>}
-        <p className="admin-note">
-          強制ミュートにはRenderで設定する管理者キーが必要です。
-        </p>
-      </aside>
-    </div>
+          <p className="admin-note">
+            強制ミュートには管理者キーが必要です。
+          </p>
+        </aside>
+      </div>
+    </>
   );
 }
