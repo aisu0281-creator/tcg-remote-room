@@ -12,6 +12,8 @@ import {
 import Yugioh from './Yugioh';
 
 const TOPIC = 'tcg-game-state';
+const LP_CHANGE_SOUND = '/sounds/lp-change.mp3';
+const LP_ZERO_SOUND = '/sounds/lp-zero.mp3';
 
 type Game = 'none' | 'yugioh';
 
@@ -54,10 +56,43 @@ export default function GameTools({
   const gameRef = useRef<Game>(game);
   const myLPRef = useRef(myLP);
   const nameRef = useRef(name);
+  const lifeRef = useRef<Record<string, LifeEntry>>({});
 
   gameRef.current = game;
   myLPRef.current = myLP;
   nameRef.current = name;
+
+  // 効果音を再生する
+  function playSound(path: string) {
+    try {
+      const audio = new Audio(path);
+      audio.volume = 0.8;
+
+      void audio.play().catch((error: unknown) => {
+        console.warn('[効果音] 再生できませんでした', {
+          path,
+          error,
+        });
+      });
+    } catch (error) {
+      console.error('[効果音] 再生エラー', error);
+    }
+  }
+
+  // LPの変化に応じて効果音を選ぶ
+  function playLPSound(previousLP: number, nextLP: number) {
+    if (previousLP === nextLP) {
+      return;
+    }
+
+    // LPが0になった場合は敗北音を優先
+    if (previousLP > 0 && nextLP === 0) {
+      playSound(LP_ZERO_SOUND);
+      return;
+    }
+
+    playSound(LP_CHANGE_SOUND);
+  }
 
   function send(message: GameMessage) {
     if (room.state !== ConnectionState.Connected) {
@@ -174,22 +209,34 @@ export default function GameTools({
             return;
           }
 
+          // 自分のデータは受信側の効果音処理をしない
           if (msg.identity === identity) {
-            console.log(
-              '[LP同期] 自分自身のデータなので表示更新を省略',
-            );
             return;
+          }
+
+          const previousLP = lifeRef.current[msg.identity]?.lp;
+
+          // 通常のLP更新だけ効果音を鳴らす。
+          // 初期状態の同期では鳴らさない。
+          if (
+            msg.type === 'life' &&
+            typeof previousLP === 'number'
+          ) {
+            playLPSound(previousLP, msg.lp);
           }
 
           console.log('[LP同期] LPデータを受信', msg);
 
-          setLife((old) => ({
-            ...old,
+          const nextLife = {
+            ...lifeRef.current,
             [msg.identity]: {
               name: msg.name,
               lp: msg.lp,
             },
-          }));
+          };
+
+          lifeRef.current = nextLife;
+          setLife(nextLife);
 
           if (msg.type === 'state') {
             if (
@@ -271,13 +318,16 @@ export default function GameTools({
   }, [room, identity]);
 
   useEffect(() => {
-    setLife((old) => ({
-      ...old,
+    const nextLife = {
+      ...lifeRef.current,
       [identity]: {
         name,
         lp: myLP,
       },
-    }));
+    };
+
+    lifeRef.current = nextLife;
+    setLife(nextLife);
 
     announceLife(myLP);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -300,11 +350,18 @@ export default function GameTools({
       Math.min(999999, myLP + delta),
     );
 
+    if (next === myLP) {
+      return;
+    }
+
+    playLPSound(myLP, next);
     setMyLP(next);
 
     setHistory((old) =>
       [`${name}: ${myLP} → ${next} LP`, ...old].slice(0, 10),
     );
+
+    setNotice('');
   }
 
   function setExactLP() {
@@ -324,11 +381,14 @@ export default function GameTools({
 
     const next = Math.min(value, 999999);
 
-    setMyLP(next);
+    if (next !== myLP) {
+      playLPSound(myLP, next);
+      setMyLP(next);
 
-    setHistory((old) =>
-      [`${name}: ${myLP} → ${next} LP`, ...old].slice(0, 10),
-    );
+      setHistory((old) =>
+        [`${name}: ${myLP} → ${next} LP`, ...old].slice(0, 10),
+      );
+    }
 
     setNotice('');
   }
@@ -342,7 +402,10 @@ export default function GameTools({
       return;
     }
 
-    setMyLP(8000);
+    if (myLP !== 8000) {
+      playLPSound(myLP, 8000);
+      setMyLP(8000);
+    }
 
     setHistory((old) =>
       [
@@ -419,9 +482,6 @@ export default function GameTools({
       {game === 'none' && (
         <div className="game-placeholder">
           <h3>遊ぶカードゲームを選んでください</h3>
-          <p>
-            磯野！ヂュエル開始の宣下をしろ！
-          </p>
         </div>
       )}
     </section>
