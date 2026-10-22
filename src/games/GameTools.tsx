@@ -1,4 +1,4 @@
-```tsx
+
 import { useEffect, useRef, useState } from 'react';
 import {
   useParticipants,
@@ -155,20 +155,14 @@ export default function GameTools({
             msg.game === 'none' ||
             msg.game === 'yugioh'
           ) {
-            console.log(
-              '[LP同期] ゲーム選択を受信',
-              msg.game,
-            );
+            console.log('[LP同期] ゲーム選択を受信', msg.game);
             setGame(msg.game);
           }
 
           return;
         }
 
-        if (
-          msg.type === 'life' ||
-          msg.type === 'state'
-        ) {
+        if (msg.type === 'life' || msg.type === 'state') {
           if (
             typeof msg.identity !== 'string' ||
             typeof msg.name !== 'string' ||
@@ -207,11 +201,7 @@ export default function GameTools({
           }
         }
       } catch (error) {
-        console.error(
-          '[LP同期] データ解析失敗',
-          error,
-          raw,
-        );
+        console.error('[LP同期] データ解析失敗', error, raw);
       }
     };
 
@@ -262,7 +252,6 @@ export default function GameTools({
       state: room.state,
     });
 
-    // 接続済みなら初期データを送信する
     if (room.state === ConnectionState.Connected) {
       sendInitialData();
     }
@@ -314,10 +303,7 @@ export default function GameTools({
     setMyLP(next);
 
     setHistory((old) =>
-      [`${name}: ${myLP} → ${next} LP`, ...old].slice(
-        0,
-        10,
-      ),
+      [`${name}: ${myLP} → ${next} LP`, ...old].slice(0, 10),
     );
   }
 
@@ -341,10 +327,7 @@ export default function GameTools({
     setMyLP(next);
 
     setHistory((old) =>
-      [`${name}: ${myLP} → ${next} LP`, ...old].slice(
-        0,
-        10,
-      ),
+      [`${name}: ${myLP} → ${next} LP`, ...old].slice(0, 10),
     );
 
     setNotice('');
@@ -368,15 +351,11 @@ export default function GameTools({
       ].slice(0, 10),
     );
 
-    setNotice(
-      '自分のライフポイントを8000に戻しました。',
-    );
+    setNotice('自分のライフポイントを8000に戻しました。');
   }
 
   const opponents = participants
-    .filter(
-      (participant) => participant.identity !== identity,
-    )
+    .filter((participant) => participant.identity !== identity)
     .map((participant) => ({
       identity: participant.identity,
       name:
@@ -448,4 +427,3 @@ export default function GameTools({
     </section>
   );
 }
-```
