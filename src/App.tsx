@@ -101,7 +101,7 @@ export default function App() {
           serverUrl={connection.serverUrl}
           token={connection.token}
           connect={true}
-          video={true}
+          video={false}
           audio={true}
           options={{ adaptiveStream: true, dynacast: true }}
           onError={(e) => setError(e.message)}
