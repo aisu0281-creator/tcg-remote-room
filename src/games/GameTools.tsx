@@ -1,5 +1,5 @@
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   useParticipants,
   useRoomContext,
@@ -23,7 +23,10 @@ type GameMessage =
       lp: number;
     };
 
-type LifeEntry = { name: string; lp: number };
+type LifeEntry = {
+  name: string;
+  lp: number;
+};
 
 type GameToolsProps = {
   identity: string;
@@ -44,16 +47,47 @@ export default function GameTools({
   const [history, setHistory] = useState<string[]>([]);
   const [notice, setNotice] = useState('');
 
+  // 最新の状態を、受信イベントからも参照できるようにする
+  const gameRef = useRef<Game>(game);
+  const myLPRef = useRef(myLP);
+  const nameRef = useRef(name);
+
+  gameRef.current = game;
+  myLPRef.current = myLP;
+  nameRef.current = name;
+
   function send(message: GameMessage) {
-    const bytes = new TextEncoder().encode(JSON.stringify(message));
+    if (!room.localParticipant) return;
+
+    const bytes = new TextEncoder().encode(
+      JSON.stringify(message),
+    );
+
     void room.localParticipant.publishData(bytes, {
       reliable: true,
       topic: TOPIC,
+    }).catch((error) => {
+      console.error('ゲームデータの送信に失敗しました:', error);
+    });
+  }
+
+  function sendCurrentState() {
+    send({
+      type: 'state',
+      game: gameRef.current,
+      identity,
+      name: nameRef.current,
+      lp: myLPRef.current,
     });
   }
 
   function announceLife(lp: number) {
-    send({ type: 'life', identity, name, lp });
+    send({
+      type: 'life',
+      identity,
+      name: nameRef.current,
+      lp,
+    });
   }
 
   useEffect(() => {
@@ -63,7 +97,8 @@ export default function GameTools({
       _kind?: unknown,
       topic?: string,
     ) => {
-      if (topic && topic !== TOPIC) return;
+      // このアプリのゲームデータ以外は無視する
+      if (topic !== TOPIC) return;
 
       try {
         const msg = JSON.parse(
@@ -71,61 +106,132 @@ export default function GameTools({
         ) as GameMessage;
 
         if (msg.type === 'request-state') {
+          // 自分自身の要求には返信しない
           if (msg.requester !== identity) {
-            send({ type: 'state', game, identity, name, lp: myLP });
+            sendCurrentState();
           }
-        } else if (msg.type === 'game') {
-          setGame(msg.game);
-        } else if (msg.type === 'life') {
+          return;
+        }
+
+        if (msg.type === 'game') {
+          if (msg.game === 'none' || msg.game === 'yugioh') {
+            setGame(msg.game);
+          }
+          return;
+        }
+
+        if (msg.type === 'life') {
+          if (
+            typeof msg.identity !== 'string' ||
+            typeof msg.name !== 'string' ||
+            !Number.isInteger(msg.lp) ||
+            msg.lp < 0 ||
+            msg.lp > 999999
+          ) {
+            return;
+          }
+
           setLife((old) => ({
             ...old,
-            [msg.identity]: { name: msg.name, lp: msg.lp },
+            [msg.identity]: {
+              name: msg.name,
+              lp: msg.lp,
+            },
           }));
-        } else if (msg.type === 'state') {
+          return;
+        }
+
+        if (msg.type === 'state') {
+          if (
+            typeof msg.identity !== 'string' ||
+            typeof msg.name !== 'string' ||
+            !Number.isInteger(msg.lp) ||
+            msg.lp < 0 ||
+            msg.lp > 999999 ||
+            (msg.game !== 'none' && msg.game !== 'yugioh')
+          ) {
+            return;
+          }
+
+          if (msg.identity === identity) return;
+
           setGame(msg.game);
           setLife((old) => ({
             ...old,
-            [msg.identity]: { name: msg.name, lp: msg.lp },
+            [msg.identity]: {
+              name: msg.name,
+              lp: msg.lp,
+            },
           }));
         }
-      } catch {
-        // このアプリ以外のデータは無視します
+      } catch (error) {
+        console.error('ゲームデータの受信に失敗しました:', error);
       }
     };
 
+    // 新しい参加者が入室したときにも現在の状態を送信
+    const onParticipantConnected = () => {
+      sendCurrentState();
+    };
+
     room.on(RoomEvent.DataReceived, onData);
-    send({ type: 'request-state', requester: identity });
-    announceLife(myLP);
+    room.on(RoomEvent.ParticipantConnected, onParticipantConnected);
+
+    // 入室時に、ほかの参加者へ最新状態を要求する
+    send({
+      type: 'request-state',
+      requester: identity,
+    });
+
+    // 自分の現在のLPも共有する
+    announceLife(myLPRef.current);
 
     return () => {
       room.off(RoomEvent.DataReceived, onData);
+      room.off(
+        RoomEvent.ParticipantConnected,
+        onParticipantConnected,
+      );
     };
-    // 初回接続時に同期要求を送ります
+    // 接続中にLPが変わっても、受信イベントを登録し直さない
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [room, identity]);
 
+  // 自分のLP変更を参加者へ即時送信
   useEffect(() => {
     setLife((old) => ({
       ...old,
-      [identity]: { name, lp: myLP },
+      [identity]: {
+        name,
+        lp: myLP,
+      },
     }));
-  }, [identity, name, myLP]);
+
+    announceLife(myLP);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [myLP, identity, name]);
 
   function chooseGame(next: Game) {
     setGame(next);
     send({ type: 'game', game: next });
+
     setNotice(
-      next === 'yugioh' ? '遊戯王の対戦画面を選択しました。' : '',
+      next === 'yugioh'
+        ? '遊戯王の対戦画面を選択しました。'
+        : '',
     );
   }
 
   function changeLP(delta: number) {
-    const next = Math.max(0, myLP + delta);
-    setMyLP(next);
-    announceLife(next);
+    const next = Math.max(
+      0,
+      Math.min(999999, myLP + delta),
+    );
 
-    const line = `${name}: ${myLP} → ${next} LP`;
-    setHistory((old) => [line, ...old].slice(0, 10));
+    setMyLP(next);
+    setHistory((old) =>
+      [`${name}: ${myLP} → ${next} LP`, ...old].slice(0, 10),
+    );
   }
 
   function setExactLP() {
@@ -142,8 +248,8 @@ export default function GameTools({
     }
 
     const next = Math.min(value, 999999);
+
     setMyLP(next);
-    announceLife(next);
     setHistory((old) =>
       [`${name}: ${myLP} → ${next} LP`, ...old].slice(0, 10),
     );
@@ -151,12 +257,15 @@ export default function GameTools({
   }
 
   function resetLP() {
-    if (!window.confirm('自分のライフポイントを8000に戻しますか？')) {
+    if (
+      !window.confirm(
+        '自分のライフポイントを8000に戻しますか？',
+      )
+    ) {
       return;
     }
 
     setMyLP(8000);
-    announceLife(8000);
     setHistory((old) =>
       [`${name}: ライフを8000 LPにリセット`, ...old].slice(0, 10),
     );
@@ -167,9 +276,10 @@ export default function GameTools({
     .filter((participant) => participant.identity !== identity)
     .map((participant) => ({
       identity: participant.identity,
-      name: life[participant.identity]?.name
-        || participant.name
-        || participant.identity,
+      name:
+        life[participant.identity]?.name ||
+        participant.name ||
+        participant.identity,
       lp: life[participant.identity]?.lp ?? 8000,
     }));
 
@@ -179,7 +289,9 @@ export default function GameTools({
         <div>
           <div className="eyebrow">GAME MODE</div>
           <h2>対戦ゲームを選択</h2>
-          <p>選択したゲームは同じルームの参加者に共有されます。</p>
+          <p>
+            選択したゲームは同じルームの参加者に共有されます。
+          </p>
         </div>
 
         <div className="game-buttons">
@@ -225,7 +337,9 @@ export default function GameTools({
       {game === 'none' && (
         <div className="game-placeholder">
           <h3>遊ぶカードゲームを選んでください</h3>
-          <p>まずは遊戯王のライフポイント管理から対応します。</p>
+          <p>
+            まずは遊戯王のライフポイント管理から対応します。
+          </p>
         </div>
       )}
     </section>
