@@ -420,7 +420,7 @@ export default function GameTools({
         <div className="game-placeholder">
           <h3>遊ぶカードゲームを選んでください</h3>
           <p>
-            まずは遊戯王のライフポイント管理から対応します。
+            磯野！ヂュエル開始の宣下をしろ！
           </p>
         </div>
       )}
