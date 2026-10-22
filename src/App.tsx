@@ -3,7 +3,6 @@ import { useState } from 'react';
 import {
   LiveKitRoom,
   VideoConference,
-  MediaDeviceSelect,
   useParticipants,
 } from '@livekit/components-react';
 
