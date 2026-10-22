@@ -417,16 +417,21 @@ export default function GameTools({
     setNotice('自分のライフポイントを8000に戻しました。');
   }
 
-  const opponents = participants
-    .filter((participant) => participant.identity !== identity)
-    .map((participant) => ({
-      identity: participant.identity,
-      name:
-        life[participant.identity]?.name ||
-        participant.name ||
-        participant.identity,
-      lp: life[participant.identity]?.lp ?? 8000,
-    }));
+const opponents = participants
+  .filter(
+    (participant) =>
+      participant.identity !== identity &&
+      participant.isCameraEnabled,
+  )
+  .map((participant) => ({
+    identity: participant.identity,
+    name:
+      life[participant.identity]?.name ||
+      participant.name ||
+      participant.identity,
+    lp: life[participant.identity]?.lp ?? 8000,
+  }));
+
 
   return (
     <section className="game-tools">
