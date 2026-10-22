@@ -165,7 +165,7 @@ export default function App() {
           <span>● テキストチャット</span>
         </div>
       </section>
-      <footer>試作版 · 友達とのテスト用</footer>
+      <footer>ver.0.0.5</footer>
     </main>
   );
 }
