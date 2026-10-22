@@ -108,20 +108,6 @@ export default function App() {
           onError={(e) => setError(e.message)}
           onDisconnected={() => setConnection(null)}
         >
-          <section className="device-select-panel">
-            <h2>カメラ・マイク設定</h2>
-
-            <label>
-              使用するカメラ
-              <MediaDeviceSelect kind="videoinput" />
-            </label>
-
-            <label>
-              使用するマイク
-              <MediaDeviceSelect kind="audioinput" />
-            </label>
-          </section>
-
           <div className="conference-shell">
             <VideoConference />
           </div>
