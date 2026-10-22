@@ -19,16 +19,6 @@ type Connection = {
   name: string;
 };
 
-type Game = 'none' | 'yugioh';
-
-type GameMessage =
-  | { type: 'request-state'; requester: string }
-  | { type: 'game'; game: Game }
-  | { type: 'life'; identity: string; name: string; lp: number }
-  | { type: 'state'; game: Game; identity: string; name: string; lp: number };
-
-type LifeEntry = { name: string; lp: number };
-
 export default function App() {
   const [roomName, setRoomName] = useState('friends-room');
   const [displayName, setDisplayName] = useState('');
