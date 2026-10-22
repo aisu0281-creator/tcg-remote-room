@@ -12,6 +12,10 @@
   box-sizing: border-box;
 }
 
+html {
+  min-height: 100%;
+}
+
 body {
   margin: 0;
   min-width: 320px;
@@ -156,6 +160,8 @@ small {
 
 /* 対戦画面 */
 .room-page {
+  width: 100%;
+  max-width: none;
   min-height: 100vh;
   padding: 16px;
   background: #0b1020;
@@ -166,8 +172,9 @@ small {
   align-items: center;
   justify-content: space-between;
   gap: 16px;
+  width: 100%;
   max-width: 1800px;
-  margin: 0 auto 20px;
+  margin: 0 auto 16px;
 }
 
 .room-header h1 {
@@ -184,6 +191,7 @@ small {
 
 /* 自分のカメラ・マイク操作 */
 .device-controls {
+  width: 100%;
   max-width: 1800px;
   margin: 0 auto 16px;
   display: flex;
@@ -211,6 +219,7 @@ small {
 
 /* 映像とメンバー一覧 */
 .room-layout {
+  width: 100%;
   max-width: 1800px;
   margin: 0 auto;
   display: grid;
@@ -361,6 +370,13 @@ small {
   overflow-wrap: anywhere;
 }
 
+/* LiveKit VideoConference の表示領域 */
+.conference-shell {
+  width: 100%;
+  min-width: 0;
+  min-height: 60vh;
+}
+
 /* タブレット */
 @media (max-width: 900px) {
   .room-layout {
@@ -372,8 +388,8 @@ small {
   }
 }
 
-/* スマートフォン */
-@media (max-width: 600px) {
+/* スマートフォン：縦画面 */
+@media (max-width: 600px) and (orientation: portrait) {
   .landing {
     padding: 20px 12px;
   }
@@ -433,5 +449,138 @@ small {
 
   .member-item {
     padding: 10px;
+  }
+
+  .conference-shell {
+    min-height: 60vh;
+  }
+}
+
+/* スマートフォン：横画面 */
+@media (max-width: 900px) and (orientation: landscape) {
+  .room-page {
+    padding: 6px;
+    min-height: 100vh;
+  }
+
+  .room-header {
+    gap: 8px;
+    margin-bottom: 6px;
+  }
+
+  .room-header h1 {
+    font-size: 1.2rem;
+    margin: 2px 0;
+  }
+
+  .room-header p {
+    font-size: 0.75rem;
+  }
+
+  .room-header .eyebrow {
+    font-size: 0.6rem;
+  }
+
+  .room-header .secondary-button {
+    padding: 8px 10px;
+    font-size: 0.8rem;
+    white-space: nowrap;
+  }
+
+  .device-controls {
+    gap: 6px;
+    margin-bottom: 6px;
+  }
+
+  .device-button {
+    flex: 1;
+    min-width: 0;
+    padding: 8px;
+    font-size: 0.78rem;
+  }
+
+  .room-layout {
+    grid-template-columns: minmax(0, 1fr) 220px;
+    gap: 8px;
+  }
+
+  .video-section,
+  .member-panel {
+    padding: 8px;
+    border-radius: 10px;
+  }
+
+  .section-heading {
+    margin-bottom: 6px;
+  }
+
+  .section-heading h2,
+  .member-panel h2 {
+    font-size: 0.85rem;
+  }
+
+  .video-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 6px;
+  }
+
+  .video-name {
+    padding: 5px;
+    font-size: 0.72rem;
+  }
+
+  .member-count {
+    margin: 5px 0 8px;
+  }
+
+  .member-list {
+    gap: 6px;
+  }
+
+  .member-item {
+    gap: 6px;
+    padding: 7px;
+  }
+
+  .member-info strong {
+    font-size: 0.78rem;
+  }
+
+  .member-info span {
+    font-size: 0.68rem;
+  }
+
+  .mute-button {
+    padding: 8px;
+    font-size: 0.72rem;
+  }
+
+  .video-help,
+  .admin-note {
+    margin-top: 6px;
+    font-size: 0.7rem;
+  }
+
+  .conference-shell {
+    min-height: 65vh;
+  }
+}
+
+/* 横画面で高さが低い端末 */
+@media (orientation: landscape) and (max-height: 500px) {
+  .room-page {
+    padding: 4px;
+  }
+
+  .room-header {
+    margin-bottom: 4px;
+  }
+
+  .room-header p {
+    display: none;
+  }
+
+  .conference-shell {
+    min-height: 70vh;
   }
 }
