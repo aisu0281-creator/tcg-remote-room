@@ -136,3 +136,195 @@
   .game-select, .yugioh-panel { padding: 12px; }
   .life-value { font-size: clamp(1.8rem, 7vh, 2.8rem); }
 }
+
+/* ページ全体の基本デザイン */
+:root {
+  color-scheme: dark;
+  background: #0b1020;
+  color: #f5f7ff;
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
+    sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  width: 100%;
+  min-height: 100%;
+  margin: 0;
+}
+
+body {
+  min-height: 100vh;
+  background: #0b1020;
+  color: #f5f7ff;
+}
+
+button,
+input,
+textarea,
+select {
+  font: inherit;
+}
+
+button {
+  cursor: pointer;
+}
+
+/* 最初の参加画面 */
+.landing {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 32px;
+  width: 100%;
+  min-height: 100vh;
+  padding: 36px 24px;
+  background:
+    radial-gradient(ellipse at 15% 15%, #18334a 0, transparent 42%),
+    radial-gradient(ellipse at 85% 80%, #28204a 0, transparent 40%),
+    #0b1020;
+  color: #f5f7ff;
+}
+
+.hero {
+  width: 100%;
+  max-width: 1000px;
+  margin: 0 auto;
+}
+
+.eyebrow {
+  color: #70e1c1;
+  font-size: 0.8rem;
+  font-weight: 800;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.hero h1 {
+  margin: 16px 0;
+  color: #fff;
+  font-size: clamp(2.2rem, 6vw, 4.5rem);
+  font-weight: 900;
+  line-height: 1.2;
+  letter-spacing: -0.04em;
+}
+
+.intro {
+  max-width: 680px;
+  color: #b9c5dc;
+  font-size: 1rem;
+  line-height: 1.9;
+}
+
+/* 参加フォーム */
+.join-card {
+  display: grid;
+  gap: 20px;
+  width: 100%;
+  max-width: 1000px;
+  margin: 0 auto;
+  padding: 28px;
+  border: 1px solid #35435d;
+  border-radius: 20px;
+  background: #11192d;
+  box-shadow: 0 20px 70px #0005;
+}
+
+.join-card label {
+  display: grid;
+  gap: 8px;
+  color: #dbe4f5;
+  font-size: 0.9rem;
+  font-weight: 700;
+}
+
+.join-card input,
+.join-card textarea,
+.join-card select {
+  width: 100%;
+  min-width: 0;
+  padding: 13px 14px;
+  border: 1px solid #40506c;
+  border-radius: 10px;
+  outline: none;
+  background: #0b1222;
+  color: #fff;
+}
+
+.join-card input:focus,
+.join-card textarea:focus,
+.join-card select:focus {
+  border-color: #70e1c1;
+  box-shadow: 0 0 0 3px #70e1c122;
+}
+
+.join-card button,
+.primary-button {
+  min-height: 46px;
+  padding: 12px 18px;
+  border: 1px solid #70e1c1;
+  border-radius: 10px;
+  background: #70e1c1;
+  color: #09201d;
+  font-weight: 800;
+}
+
+.join-card button:hover,
+.primary-button:hover {
+  background: #91f0d5;
+}
+
+.secondary-button {
+  padding: 10px 14px;
+  border: 1px solid #40506c;
+  border-radius: 10px;
+  background: #202941;
+  color: #fff;
+}
+
+.secondary-button:hover {
+  background: #2b3754;
+}
+
+/* 対応機能の説明 */
+.features {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px 22px;
+  width: 100%;
+  max-width: 1000px;
+  margin: 0 auto;
+  color: #aeb9d0;
+  font-size: 0.9rem;
+}
+
+.features > * {
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 600px) {
+  .landing {
+    gap: 24px;
+    padding: 24px 14px;
+  }
+
+  .hero h1 {
+    font-size: clamp(2rem, 9vw, 3rem);
+  }
+
+  .join-card {
+    gap: 16px;
+    padding: 18px;
+    border-radius: 16px;
+  }
+
+  .features {
+    gap: 10px 14px;
+    font-size: 0.8rem;
+  }
+}
