@@ -35,6 +35,7 @@ export default function App() {
   const [connection, setConnection] = useState<Connection | null>(null);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+  const [showExitConfirm, setShowExitConfirm] = useState(false);
 
   async function joinRoom(event: React.FormEvent) {
     event.preventDefault();
@@ -76,6 +77,16 @@ export default function App() {
     }
   }
 
+  function cancelExit() {
+    setShowExitConfirm(false);
+  }
+
+  function confirmExit() {
+    setShowExitConfirm(false);
+    setConnection(null);
+    setError('');
+  }
+
   if (connection) {
     return (
       <main className="room-page">
@@ -85,7 +96,10 @@ export default function App() {
             <h1>{connection.room}</h1>
             <p>ゲーム選択・対戦管理・音声通話・チャット</p>
           </div>
-          <button className="secondary-button" onClick={() => setConnection(null)}>
+          <button
+            className="secondary-button"
+            onClick={() => setShowExitConfirm(true)}
+          >
             退出する
           </button>
         </header>
@@ -112,6 +126,80 @@ export default function App() {
             token={connection.token}
           />
         </LiveKitRoom>
+
+        {showExitConfirm && (
+          <div
+            role="presentation"
+            onMouseDown={(event) => {
+              if (event.target === event.currentTarget) cancelExit();
+            }}
+            style={{
+              position: 'fixed',
+              inset: 0,
+              zIndex: 9999,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              padding: '20px',
+              background: 'rgba(0, 0, 0, 0.72)',
+            }}
+          >
+            <section
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="exit-dialog-title"
+              style={{
+                width: '100%',
+                maxWidth: '420px',
+                padding: '24px',
+                border: '1px solid #35435d',
+                borderRadius: '16px',
+                background: '#151c2e',
+                color: '#f5f7ff',
+                boxShadow: '0 20px 70px rgba(0,0,0,.5)',
+              }}
+            >
+              <h2 id="exit-dialog-title" style={{ marginTop: 0 }}>
+                ルームから退出しますか？
+              </h2>
+              <p style={{ color: '#b9c1d3', lineHeight: 1.8 }}>
+                退出すると、現在の対戦ルームから切断されます。
+                本当に退出してもよろしいですか？
+              </p>
+              <div
+                style={{
+                  display: 'flex',
+                  justifyContent: 'flex-end',
+                  flexWrap: 'wrap',
+                  gap: '10px',
+                  marginTop: '24px',
+                }}
+              >
+                <button
+                  className="secondary-button"
+                  onClick={cancelExit}
+                  autoFocus
+                >
+                  キャンセル
+                </button>
+                <button
+                  onClick={confirmExit}
+                  style={{
+                    padding: '10px 16px',
+                    border: '1px solid #e46b7d',
+                    borderRadius: '10px',
+                    background: '#8b3043',
+                    color: '#fff',
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                  }}
+                >
+                  退出する
+                </button>
+              </div>
+            </section>
+          </div>
+        )}
       </main>
     );
   }
