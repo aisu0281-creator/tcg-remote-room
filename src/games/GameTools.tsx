@@ -12,8 +12,8 @@ import {
 import Yugioh from './Yugioh';
 
 const TOPIC = 'tcg-game-state';
-const LP_CHANGE_SOUND = '/sounds/lp-change.mp3';
-const LP_ZERO_SOUND = '/sounds/lp-zero.mp3';
+const LP_CHANGE_SOUND = '/tcg-remote-room/sounds/lp-change.mp3';
+const LP_ZERO_SOUND = '/tcg-remote-room/sounds/lp-zero.mp3';
 
 type Game = 'none' | 'yugioh';
 
