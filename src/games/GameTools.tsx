@@ -47,7 +47,6 @@ export default function GameTools({
   const [history, setHistory] = useState<string[]>([]);
   const [notice, setNotice] = useState('');
 
-  // 最新の状態を、受信イベントからも参照できるようにする
   const gameRef = useRef<Game>(game);
   const myLPRef = useRef(myLP);
   const nameRef = useRef(name);
@@ -57,17 +56,22 @@ export default function GameTools({
   nameRef.current = name;
 
   function send(message: GameMessage) {
-    if (!room.localParticipant) return;
+    const localParticipant = room.localParticipant;
 
-    const bytes = new TextEncoder().encode(
-      JSON.stringify(message),
-    );
+    if (!localParticipant) {
+      console.warn('[LP同期] ローカル参加者が存在しません');
+      return;
+    }
 
-    void room.localParticipant.publishData(bytes, {
+    const bytes = new TextEncoder().encode(JSON.stringify(message));
+
+    console.log('[LP同期] データ送信', message);
+
+    void localParticipant.publishData(bytes, {
       reliable: true,
       topic: TOPIC,
     }).catch((error) => {
-      console.error('ゲームデータの送信に失敗しました:', error);
+      console.error('[LP同期] データ送信失敗', error);
     });
   }
 
@@ -93,20 +97,35 @@ export default function GameTools({
   useEffect(() => {
     const onData = (
       payload: Uint8Array,
-      _participant?: RemoteParticipant,
+      participant?: RemoteParticipant,
       _kind?: unknown,
       topic?: string,
     ) => {
-      // このアプリのゲームデータ以外は無視する
-      if (topic !== TOPIC) return;
+      const raw = new TextDecoder().decode(payload);
+
+      console.log('[LP同期] データ受信イベント', {
+        topic,
+        expectedTopic: TOPIC,
+        from: participant?.identity,
+        payload: raw,
+      });
+
+      if (topic !== TOPIC) {
+        console.warn('[LP同期] topicが一致しません', topic);
+        return;
+      }
 
       try {
-        const msg = JSON.parse(
-          new TextDecoder().decode(payload),
-        ) as GameMessage;
+        const msg = JSON.parse(raw) as GameMessage;
+
+        if (!msg || typeof msg !== 'object' || !('type' in msg)) {
+          console.warn('[LP同期] 不明なメッセージ', msg);
+          return;
+        }
 
         if (msg.type === 'request-state') {
-          // 自分自身の要求には返信しない
+          console.log('[LP同期] 状態要求を受信', msg);
+
           if (msg.requester !== identity) {
             sendCurrentState();
           }
@@ -115,12 +134,13 @@ export default function GameTools({
 
         if (msg.type === 'game') {
           if (msg.game === 'none' || msg.game === 'yugioh') {
+            console.log('[LP同期] ゲーム選択を受信', msg.game);
             setGame(msg.game);
           }
           return;
         }
 
-        if (msg.type === 'life') {
+        if (msg.type === 'life' || msg.type === 'state') {
           if (
             typeof msg.identity !== 'string' ||
             typeof msg.name !== 'string' ||
@@ -128,8 +148,16 @@ export default function GameTools({
             msg.lp < 0 ||
             msg.lp > 999999
           ) {
+            console.warn('[LP同期] 不正なLPデータ', msg);
             return;
           }
+
+          if (msg.identity === identity) {
+            console.log('[LP同期] 自分自身のデータなので表示更新を省略');
+            return;
+          }
+
+          console.log('[LP同期] LPデータを受信', msg);
 
           setLife((old) => ({
             ...old,
@@ -138,52 +166,39 @@ export default function GameTools({
               lp: msg.lp,
             },
           }));
-          return;
-        }
 
-        if (msg.type === 'state') {
-          if (
-            typeof msg.identity !== 'string' ||
-            typeof msg.name !== 'string' ||
-            !Number.isInteger(msg.lp) ||
-            msg.lp < 0 ||
-            msg.lp > 999999 ||
-            (msg.game !== 'none' && msg.game !== 'yugioh')
-          ) {
-            return;
+          if (msg.type === 'state') {
+            if (msg.game === 'none' || msg.game === 'yugioh') {
+              setGame(msg.game);
+            }
           }
-
-          if (msg.identity === identity) return;
-
-          setGame(msg.game);
-          setLife((old) => ({
-            ...old,
-            [msg.identity]: {
-              name: msg.name,
-              lp: msg.lp,
-            },
-          }));
         }
       } catch (error) {
-        console.error('ゲームデータの受信に失敗しました:', error);
+        console.error('[LP同期] データ解析失敗', error, raw);
       }
     };
 
-    // 新しい参加者が入室したときにも現在の状態を送信
-    const onParticipantConnected = () => {
+    const onParticipantConnected = (participant: RemoteParticipant) => {
+      console.log(
+        '[LP同期] 新しい参加者が入室しました',
+        participant.identity,
+      );
       sendCurrentState();
     };
 
     room.on(RoomEvent.DataReceived, onData);
     room.on(RoomEvent.ParticipantConnected, onParticipantConnected);
 
-    // 入室時に、ほかの参加者へ最新状態を要求する
+    console.log('[LP同期] 受信イベントを登録しました', {
+      identity,
+      room: room.name,
+    });
+
     send({
       type: 'request-state',
       requester: identity,
     });
 
-    // 自分の現在のLPも共有する
     announceLife(myLPRef.current);
 
     return () => {
@@ -192,12 +207,11 @@ export default function GameTools({
         RoomEvent.ParticipantConnected,
         onParticipantConnected,
       );
+      console.log('[LP同期] 受信イベントを解除しました');
     };
-    // 接続中にLPが変わっても、受信イベントを登録し直さない
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [room, identity]);
 
-  // 自分のLP変更を参加者へ即時送信
   useEffect(() => {
     setLife((old) => ({
       ...old,
@@ -223,10 +237,7 @@ export default function GameTools({
   }
 
   function changeLP(delta: number) {
-    const next = Math.max(
-      0,
-      Math.min(999999, myLP + delta),
-    );
+    const next = Math.max(0, Math.min(999999, myLP + delta));
 
     setMyLP(next);
     setHistory((old) =>
@@ -257,11 +268,7 @@ export default function GameTools({
   }
 
   function resetLP() {
-    if (
-      !window.confirm(
-        '自分のライフポイントを8000に戻しますか？',
-      )
-    ) {
+    if (!window.confirm('自分のライフポイントを8000に戻しますか？')) {
       return;
     }
 
