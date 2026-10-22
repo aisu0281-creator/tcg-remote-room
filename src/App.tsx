@@ -1,14 +1,14 @@
 
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import {
   LiveKitRoom,
   VideoConference,
   useParticipants,
-  useRoomContext,
 } from '@livekit/components-react';
-import { RoomEvent, type RemoteParticipant } from 'livekit-client';
+import GameTools from './games/GameTools';
 
 const API_URL = 'https://tcg-remote-room.onrender.com';
+
 const TOPIC = 'tcg-game-state';
 
 type Connection = {
